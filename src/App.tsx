@@ -270,7 +270,7 @@ function Game() {
   return (
     <div className="relative w-full h-full flex flex-col items-center justify-center">
       {isLandscape && (
-        <h1 className="text-4xl font-bold text-white mb-8">Puzzle Game</h1>
+        <h1 className="text-4xl font-bold text-white mb-8">Puzzle Tag</h1>
       )}
       <div className="bg-gray-800 p-4 rounded-xl shadow-2xl">
         <div 
