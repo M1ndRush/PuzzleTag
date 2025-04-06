@@ -7,6 +7,14 @@ interface Tile {
   position: number;
 }
 
+// Список изображений в папке public/images
+const IMAGE_LIST = [
+  '/images/puzzle1.png',
+  '/images/puzzle2.png',
+  '/images/puzzle3.png',
+  // Добавьте сюда пути к вашим изображениям
+];
+
 function useResponsiveGrid() {
   const [dimensions, setDimensions] = useState({
     width: window.innerWidth,
@@ -61,13 +69,15 @@ function Tile({
   isSelected, 
   onClick, 
   tileSize, 
-  isLandscape 
+  isLandscape,
+  imageUrl
 }: { 
   tile: Tile; 
   isSelected: boolean; 
   onClick: () => void; 
   tileSize: number;
   isLandscape: boolean;
+  imageUrl: string;
 }) {
   const cols = isLandscape ? 10 : 5;
   const rows = isLandscape ? 5 : 10;
@@ -75,7 +85,7 @@ function Tile({
   const style = {
     width: tileSize,
     height: tileSize,
-    backgroundImage: `url(${IMAGE_URL})`,
+    backgroundImage: `url(${imageUrl})`,
     backgroundSize: `${tileSize * cols}px ${tileSize * rows}px`,
     backgroundPosition: `${-(tile.position % cols) * tileSize}px ${-Math.floor(tile.position / cols) * tileSize}px`,
     transform: `rotate(${tile.rotation}deg)`,
@@ -95,24 +105,6 @@ function Tile({
         }
       `}
     />
-  );
-}
-
-const IMAGE_URL = "https://images.unsplash.com/photo-1682686580391-615b1f28e5ee?q=80&w=1080&h=2160&auto=format&fit=crop";
-
-function MainMenu({ onStartGame }: { onStartGame: () => void }) {
-  return (
-    <div className="flex flex-col items-center justify-center gap-6">
-      <h1 className="text-5xl font-bold text-white mb-4">Puzzle Game</h1>
-      <button
-        onClick={onStartGame}
-        className="px-8 py-4 bg-blue-600 text-white rounded-lg text-xl font-semibold 
-                 hover:bg-blue-700 transition-colors shadow-lg hover:shadow-xl
-                 active:transform active:scale-95"
-      >
-        Start Game
-      </button>
-    </div>
   );
 }
 
@@ -141,13 +133,76 @@ function RulesModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-function Game({ onExit }: { onExit: () => void }) {
+function CongratulationsModal({ 
+  onClose, 
+  timeElapsed 
+}: { 
+  onClose: () => void; 
+  timeElapsed: number;
+}) {
+  const formatTime = (seconds: number) => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}:${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}`;
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-gray-800 p-6 rounded-xl shadow-2xl max-w-md w-full mx-4">
+        <h2 className="text-2xl font-bold text-white mb-4">Поздравляем!</h2>
+        <div className="text-gray-300 space-y-4">
+          <p>Вы успешно собрали пазл!</p>
+          <p>Время: {formatTime(timeElapsed)}</p>
+        </div>
+        <button
+          onClick={onClose}
+          className="mt-6 w-full px-6 py-3 bg-blue-600 text-white rounded-lg text-lg font-semibold 
+                   hover:bg-blue-700 transition-colors shadow-lg hover:shadow-xl
+                   active:transform active:scale-95"
+        >
+          Следующий пазл
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Game() {
   const [tiles, setTiles] = useState<Tile[]>([]);
   const [selectedTileId, setSelectedTileId] = useState<string | null>(null);
   const [showRules, setShowRules] = useState(true);
+  const [showCongratulations, setShowCongratulations] = useState(false);
+  const [startTime, setStartTime] = useState<number | null>(null);
+  const [timeElapsed, setTimeElapsed] = useState(0);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const { tileSize, gridStyle, padding, isLandscape } = useResponsiveGrid();
+  
+  const currentImageUrl = IMAGE_LIST[currentImageIndex];
 
-  useEffect(() => {
+  // Функция для проверки, правильно ли собран пазл
+  const isPuzzleComplete = () => {
+    return tiles.every(tile => 
+      tile.position === parseInt(tile.id.split('-')[1]) && 
+      tile.rotation === 0
+    );
+  };
+
+  // Функция для запуска нового пазла
+  const startNewPuzzle = () => {
+    setShowCongratulations(false);
+    setStartTime(null);
+    setTimeElapsed(0);
+    setSelectedTileId(null);
+    
+    // Выбираем случайное изображение, отличное от текущего
+    let newIndex;
+    do {
+      newIndex = Math.floor(Math.random() * IMAGE_LIST.length);
+    } while (newIndex === currentImageIndex && IMAGE_LIST.length > 1);
+    
+    setCurrentImageIndex(newIndex);
+    
+    // Инициализируем плитки
     const totalTiles = 50; // 5x10 grid
     const initialTiles = Array.from({ length: totalTiles }, (_, i) => ({
       id: `tile-${i}`,
@@ -157,6 +212,36 @@ function Game({ onExit }: { onExit: () => void }) {
     
     const shuffledTiles = [...initialTiles].sort(() => Math.random() - 0.5);
     setTiles(shuffledTiles);
+  };
+
+  // Запускаем таймер, когда правила закрыты
+  useEffect(() => {
+    if (!showRules && !startTime) {
+      setStartTime(Date.now());
+    }
+  }, [showRules, startTime]);
+
+  // Обновляем время, когда пазл решается
+  useEffect(() => {
+    if (startTime && !showCongratulations) {
+      const timer = setInterval(() => {
+        setTimeElapsed(Math.floor((Date.now() - startTime) / 1000));
+      }, 1000);
+      
+      return () => clearInterval(timer);
+    }
+  }, [startTime, showCongratulations]);
+
+  // Проверяем, завершен ли пазл
+  useEffect(() => {
+    if (tiles.length > 0 && isPuzzleComplete() && !showCongratulations) {
+      setShowCongratulations(true);
+    }
+  }, [tiles, showCongratulations]);
+
+  // Инициализация плиток при первом рендере
+  useEffect(() => {
+    startNewPuzzle();
   }, []);
 
   const handleTileClick = (clickedTileId: string) => {
@@ -187,14 +272,6 @@ function Game({ onExit }: { onExit: () => void }) {
       {isLandscape && (
         <h1 className="text-4xl font-bold text-white mb-8">Puzzle Game</h1>
       )}
-      <button
-        onClick={onExit}
-        className="absolute top-4 left-4 p-2 text-white hover:bg-white/10 rounded-lg
-                 transition-colors flex items-center gap-2"
-      >
-        <ArrowLeft size={24} />
-        {isLandscape && <span>Назад</span>}
-      </button>
       <div className="bg-gray-800 p-4 rounded-xl shadow-2xl">
         <div 
           style={{
@@ -214,17 +291,23 @@ function Game({ onExit }: { onExit: () => void }) {
               onClick={() => handleTileClick(tile.id)}
               tileSize={tileSize}
               isLandscape={isLandscape}
+              imageUrl={currentImageUrl}
             />
           ))}
         </div>
       </div>
       {showRules && <RulesModal onClose={() => setShowRules(false)} />}
+      {showCongratulations && (
+        <CongratulationsModal 
+          onClose={startNewPuzzle} 
+          timeElapsed={timeElapsed} 
+        />
+      )}
     </div>
   );
 }
 
 function App() {
-  const [isPlaying, setIsPlaying] = useState(false);
   const { padding } = useResponsiveGrid();
 
   return (
@@ -232,11 +315,7 @@ function App() {
       className="fixed inset-0 bg-gray-900 overflow-hidden"
       style={{ padding }}
     >
-      {isPlaying ? (
-        <Game onExit={() => setIsPlaying(false)} />
-      ) : (
-        <MainMenu onStartGame={() => setIsPlaying(true)} />
-      )}
+      <Game />
     </div>
   );
 }
